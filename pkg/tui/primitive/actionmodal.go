@@ -137,9 +137,29 @@ func (m *ActionModal) AddButtons(labels []string) *ActionModal {
 	return m
 }
 
+func (m *ActionModal) AddInputField(label, value string, setFocus bool) *ActionModal {
+	m.form.AddInputField(label, value, 0, nil, nil)
+	if setFocus {
+		m.form.SetFocus(m.form.GetFormItemIndex(label))
+	}
+	return m
+}
+
+func (m *ActionModal) GetInputFieldByLabel(label string) (inputField *tview.InputField, ok bool) {
+	inputField, ok = m.form.GetFormItemByLabel(label).(*tview.InputField)
+	return
+}
+
 // ClearButtons removes all buttons from the window.
 func (m *ActionModal) ClearButtons() *ActionModal {
 	m.form.ClearButtons()
+	return m
+}
+
+func (m *ActionModal) RemoveFormItemByLabel(label string) *ActionModal {
+	if formItemIdx := m.form.GetFormItemIndex(label); formItemIdx >= 0 {
+		m.form.RemoveFormItem(formItemIdx)
+	}
 	return m
 }
 
@@ -193,7 +213,7 @@ func (m *ActionModal) Draw(screen tcell.Screen) {
 	}
 
 	// Set the modal's position and size.
-	height := len(lines) + 9
+	height := len(lines) + 11
 	width += 4
 	x := (screenWidth - width) / 2
 	y := (screenHeight - height) / 2
