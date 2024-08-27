@@ -98,7 +98,7 @@ func loadList(cmd *cobra.Command, args []string) {
 		if len(jqlFlag) > 0 {
 			searchQuery = fmt.Sprintf(`%s AND %s`, jqlFlag, searchQuery)
 		}
-		cmd.Flags().Set("jql", searchQuery)
+		cmdutil.ExitIfError(cmd.Flags().Set("jql", searchQuery))
 	}
 
 	issues, total, err := func() ([]*jira.Issue, int, error) {
