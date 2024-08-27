@@ -36,6 +36,12 @@ type MoveHandlerFunc func(state string) error
 // MoveFunc is fired when a user press 'm' character in the table cell.
 type MoveFunc func(row, col int) func() (key string, actions []string, handler MoveHandlerFunc, status string, refresh RefreshTableStateFunc)
 
+// LabelHandlerFunc is handler for the label action
+type LabelHandlerFunc func(labels []string) error
+
+// LabelFunc is fired when a user presses 'e' character in the table cell.
+type LabelFunc func(row, col int) func() (key string, labels []string, handler LabelHandlerFunc, refresh RefreshTableStateFunc)
+
 // CopyFunc is fired when a user press 'c' character in the table cell.
 type CopyFunc func(row, column int, data interface{})
 
@@ -99,6 +105,7 @@ type Table struct {
 	selectedFunc SelectedFunc
 	viewModeFunc ViewModeFunc
 	moveFunc     MoveFunc
+	labelFunc    LabelFunc
 	refreshFunc  RefreshFunc
 	copyFunc     CopyFunc
 	copyKeyFunc  CopyKeyFunc
@@ -190,6 +197,13 @@ func WithViewModeFunc(fn ViewModeFunc) TableOption {
 func WithMoveFunc(fn MoveFunc) TableOption {
 	return func(t *Table) {
 		t.moveFunc = fn
+	}
+}
+
+// WithLabelFunc sets a func that is triggered when a user presses 'L'
+func WithLabelFunc(fn LabelFunc) TableOption {
+	return func(t *Table) {
+		t.labelFunc = fn
 	}
 }
 
@@ -372,6 +386,76 @@ func (t *Table) initTable() {
 
 								if refreshFunc != nil {
 									refreshFunc(r, c, btnLabel)
+									_ = t.Paint(t.data)
+								}
+							})
+						}()
+
+						// Refresh the screen.
+						t.screen.Draw()
+					}()
+				case 'L':
+					if t.labelFunc == nil {
+						break
+					}
+
+					refreshContextInFooter := func() {
+						t.action.GetFooter().SetText("Use TAB or ← → to navigate, ENTER to select, ESC or q to cancel.").SetTextColor(tcell.ColorGray)
+					}
+
+					go func() {
+						func() {
+							t.painter.ShowPage("secondary").SendToFront("secondary")
+							defer func() {
+								t.painter.HidePage("secondary")
+								t.painter.ShowPage("action")
+							}()
+							refreshContextInFooter()
+
+							r, c := t.view.GetSelection()
+							key, labels, handler, refreshFunc := t.labelFunc(r, c)()
+
+							// currentStatusIdx := func() int {
+							// 	for i, btn := range actions {
+							// 		if btn == currentStatus {
+							// 			return i
+							// 		}
+							// 	}
+							// 	return 0
+							// }
+
+							// t.action.ClearButtons().AddButtons(actions).SetFocus(currentStatusIdx())
+							label_str := strings.Join(labels, ",")
+							t.action.ClearButtons().AddButtons([]string{"Done"})
+							t.action.RemoveFormItemByLabel("Labels:").AddInputField("Labels:", label_str, true)
+							t.action.SetText(
+								fmt.Sprintf("Modify labels on %s (as a comma-separated list):", key),
+							)
+
+							t.action.SetDoneFunc(func(btnIndex int, btnLabel string) {
+								t.action.GetFooter().SetText("Processing. Please wait...").SetTextColor(tcell.ColorGray)
+								t.screen.ForceDraw()
+
+								newLabelsField, ok := t.action.GetInputFieldByLabel("Labels:")
+								var newLabels []string
+								var err error
+								if !ok {
+									err = fmt.Errorf("unable to get form input")
+								} else {
+									newLabels = strings.Split(newLabelsField.GetText(), ",")
+									err = handler(newLabels)
+								}
+								if err != nil {
+									t.action.GetFooter().SetText(
+										fmt.Sprintf("Error: %s", err.Error()),
+									).SetTextColor(tcell.ColorRed)
+									return
+								}
+								t.painter.HidePage("action")
+								refreshContextInFooter()
+
+								if refreshFunc != nil {
+									refreshFunc(r, c, strings.Join(newLabels, ","))
 									_ = t.Paint(t.data)
 								}
 							})

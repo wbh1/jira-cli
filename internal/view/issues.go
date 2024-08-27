@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strings"
 	"text/tabwriter"
 
@@ -114,6 +115,32 @@ func (l *IssueList) Render() error {
 				}
 			}
 			return dataFn
+		}),
+		tui.WithLabelFunc(func(r, c int) func() (string, []string, tui.LabelHandlerFunc, tui.RefreshTableStateFunc) {
+			dataFn := func() (string, []string, tui.LabelHandlerFunc, tui.RefreshTableStateFunc) {
+				key := data[r][data.GetIndex(fieldKey)]
+				client := api.DefaultClient(false)
+				labelFieldIdx := data.GetIndex(fieldLabels)
+				originalLabels := strings.Split(data[r][labelFieldIdx], ",")
+
+				updateLabelsHandler := func(labels []string) error {
+					for _, l := range originalLabels {
+						if !slices.Contains(labels, l) {
+							labels = append(labels, fmt.Sprintf("-%s", l))
+						}
+					}
+					return client.Edit(key, &jira.EditRequest{
+						Labels: labels,
+					})
+				}
+
+				return key, originalLabels, updateLabelsHandler, func(r, c int, val string) {
+					data.Update(r, labelFieldIdx, val)
+				}
+			}
+
+			return dataFn
+
 		}),
 		tui.WithRefreshFunc(l.Refresh),
 		tui.WithFixedColumns(l.Display.FixedColumns),
